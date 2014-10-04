@@ -3,13 +3,13 @@ import random
 import time
 import urllib
 import warnings
+import json
+
 from hashlib import md5
 from functools import partial
-try:
-    import simplejson as json
-except ImportError:
-    import json
-from vkontakte import http
+from urllib import parse
+
+from vkontakte import http_utils
 
 API_URL = 'http://api.vk.com/api.php'
 SECURE_API_URL = 'https://api.vk.com/method/'
@@ -29,6 +29,7 @@ COMPLEX_METHODS = ['secure', 'ads', 'messages', 'likes', 'friends',
 
 class VKError(Exception):
     __slots__ = ["error"]
+
     def __init__(self, error_data):
         self.error = error_data
         Exception.__init__(self, str(self))
@@ -48,27 +49,27 @@ class VKError(Exception):
     def __str__(self):
         return "Error(code = '%s', description = '%s', params = '%s')" % (self.code, self.description, self.params)
 
+
 def _encode(s):
     if isinstance(s, (dict, list, tuple)):
-        s = json.dumps(s, ensure_ascii=False, encoding=REQUEST_ENCODING)
+        s = json.dumps(s, ensure_ascii=False)
 
-    if isinstance(s, unicode):
-        s = s.encode(REQUEST_ENCODING)
+    return s  # this can be number, etc.
 
-    return s # this can be number, etc.
 
 def _json_iterparse(response):
-    response = response.strip().decode('utf8', 'ignore').encode('utf8')
-    decoder = json.JSONDecoder(encoding="utf8", strict=False)
+    response = response.strip()
+    decoder = json.JSONDecoder(strict=False)
     idx = 0
     while idx < len(response):
         obj, idx = decoder.raw_decode(response, idx)
         yield obj
 
+
 def signature(api_secret, params):
     keys = sorted(params.keys())
     param_str = "".join(["%s=%s" % (str(key), _encode(params[key])) for key in keys])
-    return md5(param_str + str(api_secret)).hexdigest()
+    return md5((param_str + api_secret).encode('utf-8')).hexdigest()
 
 # We have to support this:
 #
@@ -77,6 +78,7 @@ def signature(api_secret, params):
 #   >>> vk.friends.get(uid=123)  # "get" is a part of vkontakte method name
 #
 # It works this way: API class has 'get' method but _API class doesn't.
+
 
 class _API(object):
     def __init__(self, api_id=None, api_secret=None, token=None, **defaults):
@@ -112,9 +114,9 @@ class _API(object):
         raise VKError(errors[0])
 
     def __getattr__(self, name):
-        '''
+        """
         Support for api.<method>.<methodName> syntax
-        '''
+        """
         if name in COMPLEX_METHODS:
             api = _API(api_id=self.api_id, api_secret=self.api_secret, token=self.token, **self.defaults)
             api.method_prefix = name + '.'
@@ -134,7 +136,7 @@ class _API(object):
 
     def _request(self, method, timeout=DEFAULT_TIMEOUT, **kwargs):
 
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             kwargs[key] = _encode(value)
 
         if self.token:
@@ -160,14 +162,14 @@ class _API(object):
             params['sig'] = self._signature(params)
             url = API_URL
             secure = False
-        data = urllib.urlencode(params)
+        data = urllib.parse.urlencode(params)
 
         headers = {"Accept": "application/json",
                    "Content-Type": "application/x-www-form-urlencoded"}
 
         # urllib2 doesn't support timeouts for python 2.5 so
         # custom function is used for making http requests
-        return http.post(url, data, headers, timeout, secure=secure)
+        return http_utils.post(url, data, headers, timeout, secure=secure)
 
 
 class API(_API):
