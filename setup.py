@@ -8,7 +8,7 @@ setup(
     version=version,
     author='Mikhail Korobov',
     author_email='kmike84@gmail.com',
-
+    requires=['requests', ],
     packages=['vkontakte'],
 
     url='http://bitbucket.org/kmike/vkontakte/',

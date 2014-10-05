@@ -9,7 +9,7 @@ from hashlib import md5
 from functools import partial
 from urllib import parse
 
-from vkontakte import http_utils
+import requests
 
 API_URL = 'http://api.vk.com/api.php'
 SECURE_API_URL = 'https://api.vk.com/method/'
@@ -58,7 +58,7 @@ def _encode(s):
 
 
 def _json_iterparse(response):
-    response = response.strip()
+    response = str(response.strip())
     decoder = json.JSONDecoder(strict=False)
     idx = 0
     while idx < len(response):
@@ -103,13 +103,12 @@ class _API(object):
 
         # there may be a response after errors
         errors = []
-        for data in _json_iterparse(response):
-            if "error" in data:
-                errors.append(data["error"])
-            if "response" in data:
-                for error in errors:
-                    warnings.warn("%s" % error)
-                return data["response"]
+        if "error" in response:
+            errors.append(response["error"])
+        if "response" in response:
+            for error in errors:
+                warnings.warn("%s" % error)
+            return response["response"]
 
         raise VKError(errors[0])
 
@@ -167,9 +166,8 @@ class _API(object):
         headers = {"Accept": "application/json",
                    "Content-Type": "application/x-www-form-urlencoded"}
 
-        # urllib2 doesn't support timeouts for python 2.5 so
-        # custom function is used for making http requests
-        return http_utils.post(url, data, headers, timeout, secure=secure)
+        response = requests.post(url, data=data, headers=headers)
+        return response.status_code, response.json()
 
 
 class API(_API):
